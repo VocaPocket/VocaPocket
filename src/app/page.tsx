@@ -45,6 +45,7 @@ export default function Home() {
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(0);
+  const [view, setView] = useState<"home" | "daily">("home");
 
   const loadAll = useCallback(async () => {
     const [w, d] = await Promise.all([
@@ -126,6 +127,14 @@ export default function Home() {
     setKnown(0);
   }
 
+  function startDailyLearn() {
+    if (!daily || !daily.newToday.length) return;
+    setQueue(daily.newToday);
+    setIdx(0);
+    setFlipped(false);
+    setKnown(0);
+  }
+
   async function grade(correct: boolean) {
     if (!queue) return;
     if (correct) setKnown((k) => k + 1);
@@ -164,6 +173,55 @@ export default function Home() {
         </span>
       </header>
 
+      {/* Tab switch */}
+      <div className="mb-4 flex gap-1 rounded-xl bg-white/60 p-1 text-sm font-semibold">
+        <button onClick={() => setView("home")} className={`flex-1 rounded-lg py-2 ${view === "home" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>翻譯 / 複習</button>
+        <button onClick={() => setView("daily")} className={`flex-1 rounded-lg py-2 ${view === "daily" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>每日單字</button>
+      </div>
+
+      {/* Daily words page */}
+      {view === "daily" && daily && (
+        <section>
+          <div className="mb-1">
+            <h2 className="text-lg font-bold text-slate-800">每日單字</h2>
+            <p className="text-xs text-slate-400">每天更新 {daily.dailyNewCount} 個新單字，和你搜尋的字分開。</p>
+          </div>
+          <div className="my-3 flex items-center gap-2 text-xs">
+            <span className="text-slate-500">每日數量</span>
+            {[3, 5, 7, 10].map((n) => (
+              <button key={n} onClick={() => setDailyCount(n)} className={`rounded-lg px-2.5 py-1 font-semibold ${daily.dailyNewCount === n ? "bg-[#7c6cf0] text-white" : "bg-white text-slate-500"}`}>{n}</button>
+            ))}
+          </div>
+          <button onClick={startDailyLearn} disabled={!daily.newToday.length} className="mb-4 w-full rounded-xl bg-[#7c6cf0] py-3 font-bold text-white disabled:opacity-60">
+            {daily.newToday.length ? `▶ 開始學習今日 ${daily.newToday.length} 個新字` : "今天的新字都學過了 🎉"}
+          </button>
+          <ul className="space-y-2">
+            {daily.newToday.map((w) => (
+              <li key={w.id} className="rounded-xl bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-800">{w.text}</span>
+                  {w.pos && <span className="text-xs text-slate-400">{w.pos}</span>}
+                  <button onClick={() => speak(w.text, w.audio)} className="text-[#7c6cf0]">🔊</button>
+                  <span className="ml-auto">{masteryBadge(w)}</span>
+                </div>
+                <p className="text-sm text-slate-600">{w.translation}</p>
+                {w.example && (
+                  <p className="mt-1 border-l-2 border-[#efeaff] pl-2 text-xs text-slate-500">
+                    {w.example}
+                    {w.exampleZh && <><br /><span className="text-slate-400">{w.exampleZh}</span></>}
+                  </p>
+                )}
+              </li>
+            ))}
+            {daily.newToday.length === 0 && (
+              <li className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">今天的新字都學完了，明天再來 🎉</li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {view === "home" && (
+      <>
       {/* Translate */}
       <section className="mb-5">
         <div className="flex items-center justify-between rounded-2xl bg-[#7c6cf0] px-3 py-2.5">
@@ -263,6 +321,8 @@ export default function Home() {
           </ul>
         )}
       </section>
+      </>
+      )}
 
       {/* Review overlay */}
       {cur && (
