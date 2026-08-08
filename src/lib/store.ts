@@ -18,7 +18,9 @@ export type Word = {
   // where it came from: user search vs pushed daily word
   origin: "search" | "daily";
   introducedDay?: string; // yyyy-mm-dd for daily words
-  // richer content (daily words carry these; searched words may not yet)
+  // richer content
+  phonetic?: string;
+  audio?: string;
   pos?: string;
   example?: string;
   exampleZh?: string;

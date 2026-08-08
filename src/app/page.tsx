@@ -10,6 +10,8 @@ type Word = {
   source: string;
   target: string;
   origin: "search" | "daily";
+  phonetic?: string;
+  audio?: string;
   pos?: string;
   example?: string;
   exampleZh?: string;
@@ -29,7 +31,7 @@ type Daily = {
 
 const TYPE_LABEL: Record<string, string> = { word: "單字", phrase: "片語", sentence: "句子" };
 
-type Result = { text: string; translation: string; type: string; source: string; target: string; saved?: boolean; error?: boolean };
+type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
 
 export default function Home() {
   const [q, setQ] = useState("");
@@ -57,7 +59,13 @@ export default function Home() {
     loadAll();
   }, [loadAll]);
 
-  function speak(text: string) {
+  function speak(text: string, audio?: string) {
+    if (audio) {
+      try {
+        new Audio(audio).play();
+        return;
+      } catch {}
+    }
     if (!("speechSynthesis" in window)) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = /[一-鿿]/.test(text) ? "zh-TW" : "en-US";
@@ -185,9 +193,17 @@ export default function Home() {
             </div>
             <div className="mt-2 flex items-center gap-2">
               <p className="text-lg font-bold text-slate-800">{result.text}</p>
-              <button onClick={() => speak(result.text)} className="text-[#7c6cf0]">🔊</button>
+              {result.pos && <span className="text-xs text-slate-400">{result.pos}</span>}
+              <button onClick={() => speak(result.text, result.audio)} className="text-[#7c6cf0]">🔊</button>
             </div>
+            {result.phonetic && <p className="text-xs text-slate-400">{result.phonetic}</p>}
             <p className="mt-1 text-slate-600">{result.translation}</p>
+            {result.example && (
+              <p className="mt-2 border-l-2 border-[#efeaff] pl-2 text-sm text-slate-500">
+                {result.example}
+                {result.exampleZh && <><br /><span className="text-slate-400">{result.exampleZh}</span></>}
+              </p>
+            )}
           </div>
         )}
         {result?.error && <div className="mt-3 rounded-2xl bg-white p-4 text-center text-sm text-slate-500 shadow-sm">翻譯失敗，請稍後再試</div>}
@@ -240,7 +256,7 @@ export default function Home() {
                   </div>
                   <p className="truncate text-sm text-slate-500">{w.translation}</p>
                 </div>
-                <button onClick={() => speak(w.text)} className="text-slate-300 hover:text-[#7c6cf0]">🔊</button>
+                <button onClick={() => speak(w.text, w.audio)} className="text-slate-300 hover:text-[#7c6cf0]">🔊</button>
                 <button onClick={() => del(w.id)} className="text-slate-300 hover:text-red-400">🗑</button>
               </li>
             ))}
@@ -265,7 +281,8 @@ export default function Home() {
               {cur.pos && <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-indigo-200">{cur.pos}</span>}
             </div>
             <p className="text-4xl font-extrabold text-white">{cur.text}</p>
-            <button onClick={() => speak(cur.text)} className="mt-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl">🔊</button>
+            {cur.phonetic && <p className="mt-1 text-sm text-white/50">{cur.phonetic}</p>}
+            <button onClick={() => speak(cur.text, cur.audio)} className="mt-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl">🔊</button>
             {flipped ? (
               <div className="mt-5">
                 <p className="text-2xl font-extrabold text-amber-400">{cur.translation}</p>

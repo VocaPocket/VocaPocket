@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
     target: b.target || "zh-TW",
     createdAt: Date.now(),
     origin: "search",
+    phonetic: b.phonetic,
+    audio: b.audio,
+    pos: b.pos,
+    example: b.example,
+    exampleZh: b.exampleZh,
     ...baseSrsFields(),
   };
   items.push(word);
