@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadWords, saveWords, Word } from "@/lib/store";
+import { loadWords, saveWords, baseSrsFields, isMastered, Word } from "@/lib/store";
 
 export async function GET() {
   const items = await loadWords();
@@ -13,8 +13,11 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ error: "empty" }, { status: 400 });
 
   const items = await loadWords();
-  if (items.some((w) => w.text.trim().toLowerCase() === key && w.target === b.target)) {
-    return NextResponse.json({ saved: false, reason: "exists" });
+  const existing = items.find(
+    (w) => w.text.trim().toLowerCase() === key && w.target === b.target,
+  );
+  if (existing) {
+    return NextResponse.json({ saved: false, reason: "exists", item: existing });
   }
 
   const word: Word = {
@@ -25,10 +28,10 @@ export async function POST(req: NextRequest) {
     source: b.source || "en",
     target: b.target || "zh-TW",
     createdAt: Date.now(),
-    reviewCount: 0,
-    mastered: false,
+    origin: "search",
+    ...baseSrsFields(),
   };
   items.push(word);
   await saveWords(items);
-  return NextResponse.json({ saved: true, item: word });
+  return NextResponse.json({ saved: true, item: { ...word, mastered: isMastered(word) } });
 }
