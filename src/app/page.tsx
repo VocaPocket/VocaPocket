@@ -33,6 +33,26 @@ const TYPE_LABEL: Record<string, string> = { word: "單字", phrase: "片語", s
 
 type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
 
+type QuizState = {
+  mode: "en2zh" | "zh2en";
+  wid: string;
+  prompt: string;
+  answer: string;
+  options: string[];
+  idx: number;
+  total: number;
+  correct: number;
+  picked: string | null;
+  done: boolean;
+};
+
+function shuffle<T>(a: T[]): T[] {
+  return a
+    .map((v) => [Math.random(), v] as [number, T])
+    .sort((x, y) => x[0] - y[0])
+    .map((x) => x[1]);
+}
+
 export default function Home() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,7 +65,8 @@ export default function Home() {
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(0);
-  const [view, setView] = useState<"home" | "daily">("home");
+  const [view, setView] = useState<"home" | "daily" | "challenge">("home");
+  const [quiz, setQuiz] = useState<QuizState | null>(null);
 
   const loadAll = useCallback(async () => {
     const [w, d] = await Promise.all([
@@ -135,6 +156,45 @@ export default function Home() {
     setKnown(0);
   }
 
+  function makeQuiz(mode: "en2zh" | "zh2en", pool: Word[]) {
+    const w = pool[Math.floor(Math.random() * pool.length)];
+    const answer = mode === "en2zh" ? w.translation : w.text;
+    const prompt = mode === "en2zh" ? w.text : w.translation;
+    const distract = shuffle(pool.filter((x) => x.id !== w.id))
+      .slice(0, 3)
+      .map((x) => (mode === "en2zh" ? x.translation : x.text));
+    return { wid: w.id, prompt, answer, options: shuffle([answer, ...distract]) };
+  }
+
+  function startQuiz(mode: "en2zh" | "zh2en") {
+    const pool = words.filter((w) => w.translation);
+    if (pool.length < 4) return;
+    const total = Math.min(10, pool.length);
+    setQuiz({ mode, ...makeQuiz(mode, pool), idx: 0, total, correct: 0, picked: null, done: false });
+  }
+
+  function pickQuiz(opt: string) {
+    if (!quiz || quiz.picked || quiz.done) return;
+    const isCorrect = opt === quiz.answer;
+    setQuiz({ ...quiz, picked: opt, correct: quiz.correct + (isCorrect ? 1 : 0) });
+    fetch("/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: quiz.wid, correct: isCorrect }),
+    });
+    setTimeout(() => {
+      setQuiz((q) => {
+        if (!q) return q;
+        if (q.idx + 1 >= q.total) {
+          loadAll();
+          return { ...q, done: true };
+        }
+        const pool = words.filter((w) => w.translation);
+        return { ...q, ...makeQuiz(q.mode, pool), idx: q.idx + 1, picked: null };
+      });
+    }, 850);
+  }
+
   async function grade(correct: boolean) {
     if (!queue) return;
     if (correct) setKnown((k) => k + 1);
@@ -177,7 +237,35 @@ export default function Home() {
       <div className="mb-4 flex gap-1 rounded-xl bg-white/60 p-1 text-sm font-semibold">
         <button onClick={() => setView("home")} className={`flex-1 rounded-lg py-2 ${view === "home" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>翻譯 / 複習</button>
         <button onClick={() => setView("daily")} className={`flex-1 rounded-lg py-2 ${view === "daily" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>每日單字</button>
+        <button onClick={() => setView("challenge")} className={`flex-1 rounded-lg py-2 ${view === "challenge" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>挑戰</button>
       </div>
+
+      {/* Challenge page */}
+      {view === "challenge" && (
+        <section>
+          <h2 className="text-lg font-bold text-slate-800">每日挑戰</h2>
+          <p className="mb-4 text-xs text-slate-400">用小遊戲練你的單字，答對累積熟練度與 XP。</p>
+          {words.filter((w) => w.translation).length < 4 ? (
+            <div className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">先收集至少 4 個單字才能開始挑戰</div>
+          ) : (
+            <div className="space-y-3">
+              <button onClick={() => startQuiz("en2zh")} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm">
+                <span className="text-3xl">🇬🇧</span>
+                <div><p className="font-bold text-slate-800">英翻中</p><p className="text-xs text-slate-400">看英文，選出正確中文</p></div>
+                <span className="ml-auto text-[#7c6cf0]">▶</span>
+              </button>
+              <button onClick={() => startQuiz("zh2en")} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm">
+                <span className="text-3xl">🇹🇼</span>
+                <div><p className="font-bold text-slate-800">中翻英</p><p className="text-xs text-slate-400">看中文，選出正確英文</p></div>
+                <span className="ml-auto text-[#7c6cf0]">▶</span>
+              </button>
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
+                🌧 落字聽力、🧩 句子重組、🔤 找字遊戲…陸續加入
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Daily words page */}
       {view === "daily" && daily && (
@@ -363,6 +451,46 @@ export default function Home() {
               <button onClick={() => setFlipped(true)} className="w-full rounded-2xl bg-white/10 py-4 font-semibold text-white">看答案</button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Quiz game overlay */}
+      {quiz && (
+        <div className="fixed inset-0 z-50 flex flex-col p-5" style={{ background: "radial-gradient(120% 120% at 50% 0%,#1e1b4b,#0f0f1e)" }}>
+          <div className="mx-auto flex w-full max-w-md items-center gap-3 pt-2 text-white">
+            <button onClick={() => { setQuiz(null); loadAll(); }} className="text-2xl text-white/60">✕</button>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-400 transition-all" style={{ width: `${(quiz.idx / quiz.total) * 100}%` }} />
+            </div>
+            <span className="text-xs text-white/50">{Math.min(quiz.idx + 1, quiz.total)}/{quiz.total}</span>
+          </div>
+
+          {quiz.done ? (
+            <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center text-center text-white">
+              <div className="text-6xl">{quiz.correct === quiz.total ? "🌟" : "✅"}</div>
+              <p className="mt-3 text-4xl font-extrabold">{quiz.correct} / {quiz.total}</p>
+              <p className="mt-1 text-white/60">答對 {quiz.correct} 題</p>
+              <button onClick={() => { setQuiz(null); loadAll(); }} className="mt-6 rounded-2xl px-8 py-3 font-bold text-white" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>完成</button>
+            </div>
+          ) : (
+            <>
+              <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center text-center">
+                <p className="text-xs text-white/40">{quiz.mode === "en2zh" ? "這個英文的意思是？" : "這個中文的英文是？"}</p>
+                <p className="mt-3 text-3xl font-extrabold text-white">{quiz.prompt}</p>
+              </div>
+              <div className="mx-auto grid w-full max-w-md gap-2.5 pb-4">
+                {quiz.options.map((o) => {
+                  let cls = "rounded-2xl bg-white/10 py-4 font-semibold text-white";
+                  if (quiz.picked) {
+                    if (o === quiz.answer) cls = "rounded-2xl bg-green-500/25 py-4 font-semibold text-green-300 ring-1 ring-green-400";
+                    else if (o === quiz.picked) cls = "rounded-2xl bg-rose-500/20 py-4 font-semibold text-rose-300 ring-1 ring-rose-400";
+                    else cls = "rounded-2xl bg-white/5 py-4 font-semibold text-white/40";
+                  }
+                  return <button key={o} onClick={() => pickQuiz(o)} disabled={!!quiz.picked} className={cls}>{o}</button>;
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </main>
