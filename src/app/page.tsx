@@ -34,7 +34,8 @@ const TYPE_LABEL: Record<string, string> = { word: "單字", phrase: "片語", s
 type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
 
 type QuizState = {
-  mode: "en2zh" | "zh2en";
+  mode: "en2zh" | "zh2en" | "random";
+  dir: "en2zh" | "zh2en";
   wid: string;
   prompt: string;
   answer: string;
@@ -67,6 +68,7 @@ export default function Home() {
   const [known, setKnown] = useState(0);
   const [view, setView] = useState<"home" | "daily" | "challenge">("home");
   const [quiz, setQuiz] = useState<QuizState | null>(null);
+  const [libFilter, setLibFilter] = useState<"all" | "search">("all");
 
   const loadAll = useCallback(async () => {
     const [w, d] = await Promise.all([
@@ -156,17 +158,18 @@ export default function Home() {
     setKnown(0);
   }
 
-  function makeQuiz(mode: "en2zh" | "zh2en", pool: Word[]) {
+  function makeQuiz(mode: "en2zh" | "zh2en" | "random", pool: Word[]) {
+    const dir: "en2zh" | "zh2en" = mode === "random" ? (Math.random() < 0.5 ? "en2zh" : "zh2en") : mode;
     const w = pool[Math.floor(Math.random() * pool.length)];
-    const answer = mode === "en2zh" ? w.translation : w.text;
-    const prompt = mode === "en2zh" ? w.text : w.translation;
+    const answer = dir === "en2zh" ? w.translation : w.text;
+    const prompt = dir === "en2zh" ? w.text : w.translation;
     const distract = shuffle(pool.filter((x) => x.id !== w.id))
       .slice(0, 3)
-      .map((x) => (mode === "en2zh" ? x.translation : x.text));
-    return { wid: w.id, prompt, answer, options: shuffle([answer, ...distract]) };
+      .map((x) => (dir === "en2zh" ? x.translation : x.text));
+    return { wid: w.id, dir, prompt, answer, options: shuffle([answer, ...distract]) };
   }
 
-  function startQuiz(mode: "en2zh" | "zh2en") {
+  function startQuiz(mode: "en2zh" | "zh2en" | "random") {
     const pool = words.filter((w) => w.translation);
     if (pool.length < 4) return;
     const total = Math.min(10, pool.length);
@@ -221,6 +224,11 @@ export default function Home() {
   }
 
   const cur = queue ? queue[idx] : null;
+  const libWords = libFilter === "search" ? words.filter((w) => w.origin === "search") : words;
+  const todayDailyIds = new Set((daily?.newToday || []).map((w) => w.id));
+  const dailyWordsSorted = [...words.filter((w) => w.origin === "daily")].sort(
+    (a, b) => Number(todayDailyIds.has(b.id)) - Number(todayDailyIds.has(a.id)),
+  );
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-xl px-4 pb-16 pt-6">
@@ -259,6 +267,11 @@ export default function Home() {
                 <div><p className="font-bold text-slate-800">中翻英</p><p className="text-xs text-slate-400">看中文，選出正確英文</p></div>
                 <span className="ml-auto text-[#7c6cf0]">▶</span>
               </button>
+              <button onClick={() => startQuiz("random")} className="flex w-full items-center gap-3 rounded-2xl p-4 text-left text-white shadow-sm" style={{ background: "linear-gradient(135deg,#7c6cf0,#6a5acd)" }}>
+                <span className="text-3xl">🎲</span>
+                <div><p className="font-bold">隨機混合</p><p className="text-xs text-white/70">中英方向隨機，最有新鮮感</p></div>
+                <span className="ml-auto">▶</span>
+              </button>
               <div className="rounded-2xl border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
                 🌧 落字聽力、🧩 句子重組、🔤 找字遊戲…陸續加入
               </div>
@@ -283,12 +296,14 @@ export default function Home() {
           <button onClick={startDailyLearn} disabled={!daily.newToday.length} className="mb-4 w-full rounded-xl bg-[#7c6cf0] py-3 font-bold text-white disabled:opacity-60">
             {daily.newToday.length ? `▶ 開始學習今日 ${daily.newToday.length} 個新字` : "今天的新字都學過了 🎉"}
           </button>
+          <p className="mb-2 text-xs font-bold text-slate-400">出現過的每日單字（{dailyWordsSorted.length}）</p>
           <ul className="space-y-2">
-            {daily.newToday.map((w) => (
+            {dailyWordsSorted.map((w) => (
               <li key={w.id} className="rounded-xl bg-white px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-800">{w.text}</span>
                   {w.pos && <span className="text-xs text-slate-400">{w.pos}</span>}
+                  {todayDailyIds.has(w.id) && <span className="rounded bg-[#efeaff] px-1.5 py-0.5 text-[10px] font-bold text-[#6a5acd]">今日</span>}
                   <button onClick={() => speak(w.text, w.audio)} className="text-[#7c6cf0]">🔊</button>
                   <span className="ml-auto">{masteryBadge(w)}</span>
                 </div>
@@ -301,8 +316,8 @@ export default function Home() {
                 )}
               </li>
             ))}
-            {daily.newToday.length === 0 && (
-              <li className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">今天的新字都學完了，明天再來 🎉</li>
+            {dailyWordsSorted.length === 0 && (
+              <li className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">還沒有每日單字，明天開始每天會有新字 🎉</li>
             )}
           </ul>
         </section>
@@ -387,12 +402,18 @@ export default function Home() {
 
       {/* Library */}
       <section>
-        <h2 className="mb-3 text-sm font-bold text-slate-500">我的單字庫（{words.length}）</h2>
-        {words.length === 0 ? (
-          <div className="rounded-2xl bg-white/60 p-10 text-center text-sm text-slate-400">還沒有單字，翻譯一個字就會自動收進來</div>
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-slate-500">我的單字庫</h2>
+          <div className="ml-auto flex gap-1 rounded-lg bg-white/60 p-0.5 text-xs font-semibold">
+            <button onClick={() => setLibFilter("all")} className={`rounded-md px-2.5 py-1 ${libFilter === "all" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>綜合 {words.length}</button>
+            <button onClick={() => setLibFilter("search")} className={`rounded-md px-2.5 py-1 ${libFilter === "search" ? "bg-white text-[#7c6cf0] shadow-sm" : "text-slate-400"}`}>搜尋 {words.filter((w) => w.origin === "search").length}</button>
+          </div>
+        </div>
+        {libWords.length === 0 ? (
+          <div className="rounded-2xl bg-white/60 p-10 text-center text-sm text-slate-400">{libFilter === "search" ? "還沒有搜尋過的字，去翻譯一個吧" : "還沒有單字，翻譯一個字就會自動收進來"}</div>
         ) : (
           <ul className="space-y-2">
-            {words.map((w) => (
+            {libWords.map((w) => (
               <li key={w.id} className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 shadow-sm">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -475,7 +496,7 @@ export default function Home() {
           ) : (
             <>
               <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center text-center">
-                <p className="text-xs text-white/40">{quiz.mode === "en2zh" ? "這個英文的意思是？" : "這個中文的英文是？"}</p>
+                <p className="text-xs text-white/40">{quiz.dir === "en2zh" ? "這個英文的意思是？" : "這個中文的英文是？"}</p>
                 <p className="mt-3 text-3xl font-extrabold text-white">{quiz.prompt}</p>
               </div>
               <div className="mx-auto grid w-full max-w-md gap-2.5 pb-4">
