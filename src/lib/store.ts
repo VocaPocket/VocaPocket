@@ -2,6 +2,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import { db, hasDb, ensureSchema } from "@/lib/db";
 import { feedPet } from "@/lib/pets";
+import type { Word } from "@/lib/types";
+
+export type { Word };
 
 // Postgres when DATABASE_URL is set (Railway production), otherwise a local
 // JSON file (dev without a DB attached). Every function below picks one path;
@@ -9,33 +12,6 @@ import { feedPet } from "@/lib/pets";
 const DATA_DIR = path.join(process.cwd(), "data");
 const WORDS_FILE = path.join(DATA_DIR, "vocabulary.json");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
-
-export type Word = {
-  id: string;
-  text: string;
-  translation: string;
-  type: string;
-  source: string;
-  target: string;
-  createdAt: number;
-  // where it came from: user search vs pushed daily word
-  origin: "search" | "daily";
-  introducedDay?: string; // yyyy-mm-dd for daily words
-  // richer content
-  phonetic?: string;
-  audio?: string;
-  pos?: string;
-  example?: string;
-  exampleZh?: string;
-  // spaced repetition + mastery
-  reps: number;
-  interval: number; // days
-  ease: number;
-  dueAt: number | null;
-  reviewCount: number;
-  correctCount: number;
-  mastered: boolean;
-};
 
 export type State = {
   dailyNewCount: number;

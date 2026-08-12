@@ -1,23 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-
-type Word = {
-  id: string;
-  text: string;
-  translation: string;
-  type: string;
-  source: string;
-  target: string;
-  origin: "search" | "daily";
-  phonetic?: string;
-  audio?: string;
-  pos?: string;
-  example?: string;
-  exampleZh?: string;
-  reviewCount: number;
-  mastered: boolean;
-};
+import type { Word } from "@/lib/types";
+import { shuffle } from "@/lib/utils";
+import FallingGame from "@/components/games/FallingGame";
+import ReorderGame from "@/components/games/ReorderGame";
+import WordSearchGame from "@/components/games/WordSearchGame";
 
 type Daily = {
   dailyNewCount: number;
@@ -72,13 +60,6 @@ type QuizState = {
   done: boolean;
 };
 
-function shuffle<T>(a: T[]): T[] {
-  return a
-    .map((v) => [Math.random(), v] as [number, T])
-    .sort((x, y) => x[0] - y[0])
-    .map((x) => x[1]);
-}
-
 export default function Home() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,6 +79,34 @@ export default function Home() {
   const [showDex, setShowDex] = useState(false);
   const [srcLang, setSrcLang] = useState("auto");
   const [tgtLang, setTgtLang] = useState("zh-TW");
+  const [activeGame, setActiveGame] = useState<"falling" | "reorder" | "wordsearch" | null>(null);
+
+  async function reviewWord(id: string, correct: boolean) {
+    await fetch("/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, correct }),
+    });
+  }
+
+  function closeGame() {
+    setActiveGame(null);
+    loadAll();
+  }
+
+  function startRandomChallenge() {
+    const pool = words.filter((w) => w.translation);
+    const canReorder = words.filter((w) => w.example && w.example.trim().split(/\s+/).length >= 3).length >= 1;
+    const canSearch = words.filter((w) => w.type === "word" && /^[A-Za-z]+$/.test(w.text) && w.text.length >= 3 && w.text.length <= 10).length >= 3;
+    const options: Array<() => void> = [];
+    if (pool.length >= 4) {
+      options.push(() => startQuiz("en2zh"), () => startQuiz("zh2en"), () => setActiveGame("falling"));
+    }
+    if (canReorder) options.push(() => setActiveGame("reorder"));
+    if (canSearch) options.push(() => setActiveGame("wordsearch"));
+    if (!options.length) return;
+    options[Math.floor(Math.random() * options.length)]();
+  }
 
   const loadAll = useCallback(async () => {
     const [w, d, p] = await Promise.all([
@@ -325,30 +334,49 @@ export default function Home() {
             </div>
           )}
 
-          {words.filter((w) => w.translation).length < 4 ? (
-            <div className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">先收集至少 4 個單字才能開始挑戰</div>
-          ) : (
-            <div className="space-y-3">
-              <button onClick={() => startQuiz("en2zh")} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm">
-                <span className="text-3xl">🇬🇧</span>
-                <div><p className="font-bold text-slate-800">英翻中</p><p className="text-xs text-slate-400">看英文，選出正確中文</p></div>
-                <span className="ml-auto text-[#7c6cf0]">▶</span>
-              </button>
-              <button onClick={() => startQuiz("zh2en")} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm">
-                <span className="text-3xl">🇹🇼</span>
-                <div><p className="font-bold text-slate-800">中翻英</p><p className="text-xs text-slate-400">看中文，選出正確英文</p></div>
-                <span className="ml-auto text-[#7c6cf0]">▶</span>
-              </button>
-              <button onClick={() => startQuiz("random")} className="flex w-full items-center gap-3 rounded-2xl p-4 text-left text-white shadow-sm" style={{ background: "linear-gradient(135deg,#7c6cf0,#6a5acd)" }}>
-                <span className="text-3xl">🎲</span>
-                <div><p className="font-bold">隨機混合</p><p className="text-xs text-white/70">中英方向隨機，最有新鮮感</p></div>
-                <span className="ml-auto">▶</span>
-              </button>
-              <div className="rounded-2xl border-2 border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
-                🌧 落字聽力、🧩 句子重組、🔤 找字遊戲…陸續加入
+          {(() => {
+            const quizPool = words.filter((w) => w.translation);
+            const reorderPool = words.filter((w) => w.example && w.example.trim().split(/\s+/).length >= 3);
+            const searchPool = words.filter((w) => w.type === "word" && /^[A-Za-z]+$/.test(w.text) && w.text.length >= 3 && w.text.length <= 10);
+            const anyPlayable = quizPool.length >= 4 || reorderPool.length >= 1 || searchPool.length >= 3;
+            if (!anyPlayable) {
+              return <div className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">先收集幾個單字才能開始挑戰</div>;
+            }
+            return (
+              <div className="space-y-3">
+                <button onClick={startRandomChallenge} className="flex w-full items-center gap-3 rounded-2xl p-4 text-left text-white shadow-sm" style={{ background: "linear-gradient(135deg,#7c6cf0,#6a5acd)" }}>
+                  <span className="text-3xl">🎲</span>
+                  <div><p className="font-bold">完全隨機</p><p className="text-xs text-white/70">隨機抽一種遊戲，每次都有新鮮感</p></div>
+                  <span className="ml-auto">▶</span>
+                </button>
+                <button onClick={() => startQuiz("en2zh")} disabled={quizPool.length < 4} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm disabled:opacity-40">
+                  <span className="text-3xl">🇬🇧</span>
+                  <div><p className="font-bold text-slate-800">英翻中</p><p className="text-xs text-slate-400">看英文，選出正確中文</p></div>
+                  <span className="ml-auto text-[#7c6cf0]">▶</span>
+                </button>
+                <button onClick={() => startQuiz("zh2en")} disabled={quizPool.length < 4} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm disabled:opacity-40">
+                  <span className="text-3xl">🇹🇼</span>
+                  <div><p className="font-bold text-slate-800">中翻英</p><p className="text-xs text-slate-400">看中文，選出正確英文</p></div>
+                  <span className="ml-auto text-[#7c6cf0]">▶</span>
+                </button>
+                <button onClick={() => setActiveGame("falling")} disabled={quizPool.length < 4} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm disabled:opacity-40">
+                  <span className="text-3xl">🌧</span>
+                  <div><p className="font-bold text-slate-800">落字聽力</p><p className="text-xs text-slate-400">聽單字，點正確翻譯的泡泡</p></div>
+                  <span className="ml-auto text-[#7c6cf0]">▶</span>
+                </button>
+                <button onClick={() => setActiveGame("reorder")} disabled={reorderPool.length < 1} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm disabled:opacity-40">
+                  <span className="text-3xl">🧩</span>
+                  <div><p className="font-bold text-slate-800">句子重組</p><p className="text-xs text-slate-400">把打散的單字排回正確句子</p></div>
+                  <span className="ml-auto text-[#7c6cf0]">▶</span>
+                </button>
+                <button onClick={() => setActiveGame("wordsearch")} disabled={searchPool.length < 3} className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm disabled:opacity-40">
+                  <span className="text-3xl">🔤</span>
+                  <div><p className="font-bold text-slate-800">找字遊戲</p><p className="text-xs text-slate-400">從字母格子裡找出單字</p></div>
+                  <span className="ml-auto text-[#7c6cf0]">▶</span>
+                </button>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </section>
       )}
 
@@ -599,6 +627,16 @@ export default function Home() {
             </>
           )}
         </div>
+      )}
+
+      {activeGame === "falling" && (
+        <FallingGame words={words} onReview={reviewWord} onClose={closeGame} />
+      )}
+      {activeGame === "reorder" && (
+        <ReorderGame words={words} onReview={reviewWord} onClose={closeGame} />
+      )}
+      {activeGame === "wordsearch" && (
+        <WordSearchGame words={words} onReview={reviewWord} onClose={closeGame} />
       )}
     </main>
   );
