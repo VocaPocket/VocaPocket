@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { db, hasDb, ensureSchema } from "@/lib/db";
+import { feedPet } from "@/lib/pets";
 
 // Postgres when DATABASE_URL is set (Railway production), otherwise a local
 // JSON file (dev without a DB attached). Every function below picks one path;
@@ -46,6 +47,9 @@ export type State = {
   todayXp: number;
   lastStudyDay: string;
   days: Record<string, { xp: number }>;
+  petSpeciesIdx: number;
+  petXp: number;
+  collection: Record<string, number>;
 };
 
 const DEFAULT_STATE: State = {
@@ -58,6 +62,9 @@ const DEFAULT_STATE: State = {
   todayXp: 0,
   lastStudyDay: "",
   days: {},
+  petSpeciesIdx: 0,
+  petXp: 0,
+  collection: {},
 };
 
 async function ensureDir() {
@@ -155,6 +162,9 @@ function rowToState(r: Record<string, unknown>): State {
     todayXp: Number(r.today_xp),
     lastStudyDay: r.last_study_day as string,
     days: (r.days as Record<string, { xp: number }>) || {},
+    petSpeciesIdx: Number(r.pet_species_idx ?? 0),
+    petXp: Number(r.pet_xp ?? 0),
+    collection: (r.collection as Record<string, number>) || {},
   };
 }
 
@@ -178,11 +188,13 @@ export async function saveState(state: State) {
     await ensureSchema();
     await db().query(
       `UPDATE app_state SET daily_new_count=$1, last_intro_day=$2, streak=$3, longest=$4,
-         total_xp=$5, today_key=$6, today_xp=$7, last_study_day=$8, days=$9 WHERE id = 1`,
+         total_xp=$5, today_key=$6, today_xp=$7, last_study_day=$8, days=$9,
+         pet_species_idx=$10, pet_xp=$11, collection=$12 WHERE id = 1`,
       [
         state.dailyNewCount, state.lastIntroDay, state.streak, state.longest,
         state.totalXp, state.todayKey, state.todayXp, state.lastStudyDay,
         JSON.stringify(state.days),
+        state.petSpeciesIdx, state.petXp, JSON.stringify(state.collection),
       ],
     );
     return;
@@ -239,5 +251,9 @@ export function awardXp(state: State, amount: number): State {
     state.lastStudyDay = today;
     state.longest = Math.max(state.longest, state.streak);
   }
+  const fed = feedPet(state.petSpeciesIdx, state.petXp, state.collection, amount);
+  state.petSpeciesIdx = fed.speciesIdx;
+  state.petXp = fed.petXp;
+  state.collection = fed.collection;
   return state;
 }

@@ -29,7 +29,32 @@ type Daily = {
   review: Word[];
 };
 
+type Pet = {
+  current: { speciesId: string; name: string; emoji: string; stage: number; stageLabel: string; xp: number; pct: number };
+  species: { id: string; name: string; emoji: string }[];
+  collection: Record<string, number>;
+};
+
 const TYPE_LABEL: Record<string, string> = { word: "單字", phrase: "片語", sentence: "句子" };
+
+const SRC_LANGS = [
+  { code: "auto", label: "自動偵測" },
+  { code: "en", label: "英文" },
+  { code: "zh-TW", label: "中文" },
+  { code: "ja", label: "日文" },
+  { code: "ko", label: "韓文" },
+  { code: "fr", label: "法文" },
+  { code: "de", label: "德文" },
+  { code: "es", label: "西班牙文" },
+  { code: "it", label: "義大利文" },
+  { code: "pt", label: "葡萄牙文" },
+  { code: "ru", label: "俄文" },
+  { code: "vi", label: "越南文" },
+  { code: "th", label: "泰文" },
+  { code: "id", label: "印尼文" },
+];
+const TGT_LANGS = SRC_LANGS.filter((l) => l.code !== "auto");
+const LANG_LABEL: Record<string, string> = Object.fromEntries(SRC_LANGS.map((l) => [l.code, l.label]));
 
 type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
 
@@ -60,6 +85,7 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [words, setWords] = useState<Word[]>([]);
   const [daily, setDaily] = useState<Daily | null>(null);
+  const [pet, setPet] = useState<Pet | null>(null);
 
   // review session
   const [queue, setQueue] = useState<Word[] | null>(null);
@@ -69,14 +95,19 @@ export default function Home() {
   const [view, setView] = useState<"home" | "daily" | "challenge">("home");
   const [quiz, setQuiz] = useState<QuizState | null>(null);
   const [libFilter, setLibFilter] = useState<"all" | "search">("all");
+  const [showDex, setShowDex] = useState(false);
+  const [srcLang, setSrcLang] = useState("auto");
+  const [tgtLang, setTgtLang] = useState("zh-TW");
 
   const loadAll = useCallback(async () => {
-    const [w, d] = await Promise.all([
+    const [w, d, p] = await Promise.all([
       fetch("/api/words").then((r) => r.json()),
       fetch("/api/daily").then((r) => r.json()),
+      fetch("/api/pet").then((r) => r.json()),
     ]);
     setWords(w.items || []);
     setDaily(d);
+    setPet(p);
   }, []);
 
   useEffect(() => {
@@ -107,7 +138,7 @@ export default function Home() {
       const d = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, source: srcLang, target: tgtLang }),
       }).then((r) => r.json());
       if (d.error) {
         setResult({ text, translation: "", type: "", source: "", target: "", error: true });
@@ -124,6 +155,12 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function swapLangs() {
+    const oldSrc = srcLang;
+    setSrcLang(tgtLang);
+    setTgtLang(oldSrc === "auto" ? "en" : oldSrc);
   }
 
   async function del(id: string) {
@@ -252,7 +289,42 @@ export default function Home() {
       {view === "challenge" && (
         <section>
           <h2 className="text-lg font-bold text-slate-800">每日挑戰</h2>
-          <p className="mb-4 text-xs text-slate-400">用小遊戲練你的單字，答對累積熟練度與 XP。</p>
+          <p className="mb-4 text-xs text-slate-400">用小遊戲練你的單字，答對累積熟練度、餵養你的寵物。</p>
+
+          {pet && (
+            <div className="mb-4 rounded-2xl p-5 text-white" style={{ background: "linear-gradient(135deg,#7c6cf0,#6a5acd)" }}>
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-4xl">{pet.current.emoji}</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold">{pet.current.name}</p>
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold">{pet.current.stageLabel}</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-white transition-all" style={{ width: `${pet.current.pct}%` }} />
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowDex((v) => !v)} className="mt-3 w-full rounded-xl bg-white/15 py-2 text-xs font-semibold">
+                {showDex ? "收起圖鑑 ▲" : `📖 我的圖鑑（已收集 ${Object.keys(pet.collection).length}/${pet.species.length}）▼`}
+              </button>
+              {showDex && (
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {pet.species.map((sp) => {
+                    const count = pet.collection[sp.id] || 0;
+                    return (
+                      <div key={sp.id} className={`flex flex-col items-center gap-0.5 rounded-xl py-3 ${count ? "bg-white/20" : "bg-white/5"}`}>
+                        <span className={`text-2xl ${count ? "" : "opacity-25 grayscale"}`}>{sp.emoji}</span>
+                        <span className="text-[10px] font-semibold">{count ? sp.name : "???"}</span>
+                        {count > 1 && <span className="text-[9px] opacity-70">×{count}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {words.filter((w) => w.translation).length < 4 ? (
             <div className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-400">先收集至少 4 個單字才能開始挑戰</div>
           ) : (
@@ -328,9 +400,23 @@ export default function Home() {
       {/* Translate */}
       <section className="mb-5">
         <div className="flex items-center justify-between rounded-2xl bg-[#7c6cf0] px-3 py-2.5">
-          <span className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium text-white">自動偵測</span>
-          <span className="text-white">⇄</span>
-          <span className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium text-white">中 / EN</span>
+          <select
+            value={srcLang}
+            onChange={(e) => setSrcLang(e.target.value)}
+            className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none"
+            style={{ colorScheme: "dark" }}
+          >
+            {SRC_LANGS.map((l) => <option key={l.code} value={l.code} className="text-slate-800">{l.label}</option>)}
+          </select>
+          <button onClick={swapLangs} className="text-white">⇄</button>
+          <select
+            value={tgtLang}
+            onChange={(e) => setTgtLang(e.target.value)}
+            className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-medium text-white outline-none"
+            style={{ colorScheme: "dark" }}
+          >
+            {TGT_LANGS.map((l) => <option key={l.code} value={l.code} className="text-slate-800">{l.label}</option>)}
+          </select>
         </div>
         <div className="mt-2 flex items-center gap-2 rounded-2xl bg-white px-3.5 py-3 shadow-sm">
           <input
@@ -349,7 +435,7 @@ export default function Home() {
           <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2">
               <span className="rounded-md bg-[#efeaff] px-2 py-0.5 text-[11px] font-bold text-[#6a5acd]">{TYPE_LABEL[result.type] || result.type}</span>
-              <span className="text-xs text-slate-400">{result.source} → {result.target}</span>
+              <span className="text-xs text-slate-400">{LANG_LABEL[result.source] || result.source} → {LANG_LABEL[result.target] || result.target}</span>
               <span className="ml-auto text-[11px] font-bold text-green-600">{result.saved !== false ? "✓ 已收藏" : "已在庫中"}</span>
             </div>
             <div className="mt-2 flex items-center gap-2">

@@ -53,9 +53,15 @@ export async function ensureSchema() {
       today_key TEXT NOT NULL DEFAULT '',
       today_xp INT NOT NULL DEFAULT 0,
       last_study_day TEXT NOT NULL DEFAULT '',
-      days JSONB NOT NULL DEFAULT '{}'::jsonb
+      days JSONB NOT NULL DEFAULT '{}'::jsonb,
+      pet_species_idx INT NOT NULL DEFAULT 0,
+      pet_xp INT NOT NULL DEFAULT 0,
+      collection JSONB NOT NULL DEFAULT '{}'::jsonb
     );
     INSERT INTO app_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+    ALTER TABLE app_state ADD COLUMN IF NOT EXISTS pet_species_idx INT NOT NULL DEFAULT 0;
+    ALTER TABLE app_state ADD COLUMN IF NOT EXISTS pet_xp INT NOT NULL DEFAULT 0;
+    ALTER TABLE app_state ADD COLUMN IF NOT EXISTS collection JSONB NOT NULL DEFAULT '{}'::jsonb;
   `);
   initialized = true;
 }

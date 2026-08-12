@@ -6,7 +6,8 @@ export async function POST(req: NextRequest) {
   const text = (body.text || "").trim();
   if (!text) return NextResponse.json({ error: "empty" }, { status: 400 });
 
-  const source = detectSource(text);
+  const source =
+    body.source && body.source !== "auto" ? body.source : detectSource(text);
   let target = body.target || (source === "en" ? "zh-TW" : "en");
   if (source === target) target = source === "en" ? "zh-TW" : "en";
   const type = detectType(text);
