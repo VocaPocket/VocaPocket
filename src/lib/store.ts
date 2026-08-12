@@ -1,8 +1,10 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { db, hasDb, ensureSchema } from "@/lib/db";
 
-// File-based store for the prototype. Swap for a database (Postgres/D1)
-// when we move to multi-user + production persistence.
+// Postgres when DATABASE_URL is set (Railway production), otherwise a local
+// JSON file (dev without a DB attached). Every function below picks one path;
+// callers never need to know which.
 const DATA_DIR = path.join(process.cwd(), "data");
 const WORDS_FILE = path.join(DATA_DIR, "vocabulary.json");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -67,7 +69,38 @@ export function dayKey(d = new Date()): string {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 
+function rowToWord(r: Record<string, unknown>): Word {
+  return {
+    id: r.id as string,
+    text: r.text as string,
+    translation: r.translation as string,
+    type: r.type as string,
+    source: r.source as string,
+    target: r.target as string,
+    createdAt: Number(r.created_at),
+    origin: r.origin as "search" | "daily",
+    introducedDay: (r.introduced_day as string) || undefined,
+    phonetic: (r.phonetic as string) || undefined,
+    audio: (r.audio as string) || undefined,
+    pos: (r.pos as string) || undefined,
+    example: (r.example as string) || undefined,
+    exampleZh: (r.example_zh as string) || undefined,
+    reps: Number(r.reps),
+    interval: Number(r.interval),
+    ease: Number(r.ease),
+    dueAt: r.due_at == null ? null : Number(r.due_at),
+    reviewCount: Number(r.review_count),
+    correctCount: Number(r.correct_count),
+    mastered: !!r.mastered,
+  };
+}
+
 export async function loadWords(): Promise<Word[]> {
+  if (hasDb) {
+    await ensureSchema();
+    const { rows } = await db().query("SELECT * FROM words ORDER BY created_at DESC");
+    return rows.map(rowToWord);
+  }
   await ensureDir();
   try {
     const raw = await fs.readFile(WORDS_FILE, "utf-8");
@@ -78,11 +111,59 @@ export async function loadWords(): Promise<Word[]> {
 }
 
 export async function saveWords(items: Word[]) {
+  if (hasDb) {
+    await ensureSchema();
+    const client = await db().connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM words");
+      for (const w of items) {
+        await client.query(
+          `INSERT INTO words (id, text, translation, type, source, target, created_at, origin,
+             introduced_day, phonetic, audio, pos, example, example_zh,
+             reps, interval, ease, due_at, review_count, correct_count, mastered)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+          [
+            w.id, w.text, w.translation, w.type, w.source, w.target, w.createdAt, w.origin,
+            w.introducedDay ?? null, w.phonetic ?? null, w.audio ?? null, w.pos ?? null,
+            w.example ?? null, w.exampleZh ?? null,
+            w.reps, w.interval, w.ease, w.dueAt, w.reviewCount, w.correctCount, w.mastered,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+    return;
+  }
   await ensureDir();
   await fs.writeFile(WORDS_FILE, JSON.stringify({ items }, null, 2));
 }
 
+function rowToState(r: Record<string, unknown>): State {
+  return {
+    dailyNewCount: Number(r.daily_new_count),
+    lastIntroDay: r.last_intro_day as string,
+    streak: Number(r.streak),
+    longest: Number(r.longest),
+    totalXp: Number(r.total_xp),
+    todayKey: r.today_key as string,
+    todayXp: Number(r.today_xp),
+    lastStudyDay: r.last_study_day as string,
+    days: (r.days as Record<string, { xp: number }>) || {},
+  };
+}
+
 export async function loadState(): Promise<State> {
+  if (hasDb) {
+    await ensureSchema();
+    const { rows } = await db().query("SELECT * FROM app_state WHERE id = 1");
+    return rows[0] ? rowToState(rows[0]) : { ...DEFAULT_STATE };
+  }
   await ensureDir();
   try {
     const raw = await fs.readFile(STATE_FILE, "utf-8");
@@ -93,6 +174,19 @@ export async function loadState(): Promise<State> {
 }
 
 export async function saveState(state: State) {
+  if (hasDb) {
+    await ensureSchema();
+    await db().query(
+      `UPDATE app_state SET daily_new_count=$1, last_intro_day=$2, streak=$3, longest=$4,
+         total_xp=$5, today_key=$6, today_xp=$7, last_study_day=$8, days=$9 WHERE id = 1`,
+      [
+        state.dailyNewCount, state.lastIntroDay, state.streak, state.longest,
+        state.totalXp, state.todayKey, state.todayXp, state.lastStudyDay,
+        JSON.stringify(state.days),
+      ],
+    );
+    return;
+  }
   await ensureDir();
   await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2));
 }
