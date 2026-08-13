@@ -64,6 +64,7 @@ function rowToWord(r: Record<string, unknown>): Word {
     origin: r.origin as "search" | "daily",
     introducedDay: (r.introduced_day as string) || undefined,
     phonetic: (r.phonetic as string) || undefined,
+    kk: (r.kk as string) || undefined,
     audio: (r.audio as string) || undefined,
     pos: (r.pos as string) || undefined,
     example: (r.example as string) || undefined,
@@ -103,12 +104,12 @@ export async function saveWords(items: Word[]) {
       for (const w of items) {
         await client.query(
           `INSERT INTO words (id, text, translation, type, source, target, created_at, origin,
-             introduced_day, phonetic, audio, pos, example, example_zh,
+             introduced_day, phonetic, kk, audio, pos, example, example_zh,
              reps, interval, ease, due_at, review_count, correct_count, mastered)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
           [
             w.id, w.text, w.translation, w.type, w.source, w.target, w.createdAt, w.origin,
-            w.introducedDay ?? null, w.phonetic ?? null, w.audio ?? null, w.pos ?? null,
+            w.introducedDay ?? null, w.phonetic ?? null, w.kk ?? null, w.audio ?? null, w.pos ?? null,
             w.example ?? null, w.exampleZh ?? null,
             w.reps, w.interval, w.ease, w.dueAt, w.reviewCount, w.correctCount, w.mastered,
           ],

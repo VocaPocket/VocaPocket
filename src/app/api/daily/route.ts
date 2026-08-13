@@ -10,6 +10,7 @@ import {
   Word,
 } from "@/lib/store";
 import { WORDBANK } from "@/lib/wordbank";
+import { enrichEnglish } from "@/lib/translate";
 
 // GET today's learning set: newly-introduced daily words + everything due for
 // review (recently-searched words AND daily words), plus mastery stats.
@@ -21,10 +22,17 @@ export async function GET() {
   // Introduce today's batch of new daily words (once per day).
   if (state.lastIntroDay !== today) {
     const known = new Set(words.map((w) => w.text.toLowerCase()));
-    let added = 0;
+    const toAdd = [];
     for (const bw of WORDBANK) {
-      if (added >= state.dailyNewCount) break;
+      if (toAdd.length >= state.dailyNewCount) break;
       if (known.has(bw.word.toLowerCase())) continue;
+      toAdd.push(bw);
+    }
+    // Fetch phonetic/KK/audio for the new batch (curated pos/example from
+    // the wordbank are kept as-is; only pronunciation data comes from the API).
+    const enriched = await Promise.all(toAdd.map((bw) => enrichEnglish(bw.word)));
+    toAdd.forEach((bw, i) => {
+      const e = enriched[i];
       words.push({
         id: crypto.randomUUID(),
         text: bw.word,
@@ -38,10 +46,12 @@ export async function GET() {
         pos: bw.pos,
         example: bw.example,
         exampleZh: bw.exampleZh,
+        phonetic: e.phonetic,
+        kk: e.kk,
+        audio: e.audio,
         ...baseSrsFields(),
       } as Word);
-      added += 1;
-    }
+    });
     state.lastIntroDay = today;
     await saveWords(words);
     await saveState(state);

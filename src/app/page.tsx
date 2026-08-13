@@ -44,7 +44,7 @@ const SRC_LANGS = [
 const TGT_LANGS = SRC_LANGS.filter((l) => l.code !== "auto");
 const LANG_LABEL: Record<string, string> = Object.fromEntries(SRC_LANGS.map((l) => [l.code, l.label]));
 
-type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
+type Result = { text: string; translation: string; type: string; source: string; target: string; phonetic?: string; kk?: string; audio?: string; pos?: string; example?: string; exampleZh?: string; saved?: boolean; error?: boolean };
 
 type QuizState = {
   mode: "en2zh" | "zh2en" | "random";
@@ -407,6 +407,7 @@ export default function Home() {
                   <button onClick={() => speak(w.text, w.audio)} className="text-[#7c6cf0]">🔊</button>
                   <span className="ml-auto">{masteryBadge(w)}</span>
                 </div>
+                {w.kk && <p className="text-xs font-medium text-[#7c6cf0]">KK [{w.kk}]</p>}
                 <p className="text-sm text-slate-600">{w.translation}</p>
                 {w.example && (
                   <p className="mt-1 border-l-2 border-[#efeaff] pl-2 text-xs text-slate-500">
@@ -471,7 +472,12 @@ export default function Home() {
               {result.pos && <span className="text-xs text-slate-400">{result.pos}</span>}
               <button onClick={() => speak(result.text, result.audio)} className="text-[#7c6cf0]">🔊</button>
             </div>
-            {result.phonetic && <p className="text-xs text-slate-400">{result.phonetic}</p>}
+            {(result.kk || result.phonetic) && (
+              <p className="text-xs text-slate-400">
+                {result.kk && <span className="mr-2 font-semibold text-[#7c6cf0]">KK [{result.kk}]</span>}
+                {result.phonetic && <span>IPA {result.phonetic}</span>}
+              </p>
+            )}
             <p className="mt-1 text-slate-600">{result.translation}</p>
             {result.example && (
               <p className="mt-2 border-l-2 border-[#efeaff] pl-2 text-sm text-slate-500">
@@ -535,6 +541,7 @@ export default function Home() {
                     {w.origin === "daily" && <span className="rounded bg-[#efeaff] px-1.5 py-0.5 text-[10px] font-bold text-[#6a5acd]">每日</span>}
                     {masteryBadge(w)}
                   </div>
+                  {w.kk && <p className="truncate text-xs font-medium text-[#7c6cf0]">KK [{w.kk}]</p>}
                   <p className="truncate text-sm text-slate-500">{w.translation}</p>
                 </div>
                 <button onClick={() => speak(w.text, w.audio)} className="text-slate-300 hover:text-[#7c6cf0]">🔊</button>
@@ -564,7 +571,7 @@ export default function Home() {
               {cur.pos && <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-indigo-200">{cur.pos}</span>}
             </div>
             <p className="text-4xl font-extrabold text-white">{cur.text}</p>
-            {cur.phonetic && <p className="mt-1 text-sm text-white/50">{cur.phonetic}</p>}
+            {cur.kk && <p className="mt-1 text-sm text-white/50">KK [{cur.kk}]</p>}
             <button onClick={() => speak(cur.text, cur.audio)} className="mt-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl">🔊</button>
             {flipped ? (
               <div className="mt-5">

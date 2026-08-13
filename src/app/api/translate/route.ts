@@ -15,9 +15,10 @@ export async function POST(req: NextRequest) {
   try {
     const translation = await mymemory(text, source, target);
 
-    // Enrich single English words with IPA, audio, part of speech, example.
+    // Enrich single English words with IPA, KK, audio, part of speech, example.
     let extra: {
       phonetic?: string;
+      kk?: string;
       audio?: string;
       pos?: string;
       example?: string;
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     } = {};
     if (source === "en" && type === "word") {
       const e = await enrichEnglish(text);
-      extra = { phonetic: e.phonetic, audio: e.audio, pos: e.pos, example: e.example };
+      extra = { phonetic: e.phonetic, kk: e.kk, audio: e.audio, pos: e.pos, example: e.example };
       if (e.example) {
         try {
           extra.exampleZh = await mymemory(e.example, "en", "zh-TW");

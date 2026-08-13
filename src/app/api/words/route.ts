@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     createdAt: Date.now(),
     origin: "search",
     phonetic: b.phonetic,
+    kk: b.kk,
     audio: b.audio,
     pos: b.pos,
     example: b.example,

@@ -1,4 +1,5 @@
 // Language + type detection and free translation via the MyMemory API.
+import { ipaToKK } from "@/lib/kk";
 
 export function detectSource(text: string): string {
   if (/[぀-ヿ]/.test(text)) return "ja";
@@ -27,7 +28,7 @@ const POS_ZH: Record<string, string> = {
   determiner: "限定詞",
 };
 
-export type Enrichment = { phonetic?: string; audio?: string; pos?: string; example?: string };
+export type Enrichment = { phonetic?: string; kk?: string; audio?: string; pos?: string; example?: string };
 
 // Free Dictionary API — adds IPA, audio, part of speech and an example for
 // English words. Best-effort: returns {} on any failure.
@@ -57,6 +58,7 @@ export async function enrichEnglish(word: string): Promise<Enrichment> {
     }
     return {
       phonetic: phonetic || undefined,
+      kk: phonetic ? ipaToKK(phonetic) : undefined,
       audio: audio || undefined,
       pos: pos ? POS_ZH[pos] || pos : undefined,
       example: example || undefined,

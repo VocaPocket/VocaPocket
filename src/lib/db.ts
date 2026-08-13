@@ -31,6 +31,7 @@ export async function ensureSchema() {
       origin TEXT NOT NULL DEFAULT 'search',
       introduced_day TEXT,
       phonetic TEXT,
+      kk TEXT,
       audio TEXT,
       pos TEXT,
       example TEXT,
@@ -62,6 +63,7 @@ export async function ensureSchema() {
     ALTER TABLE app_state ADD COLUMN IF NOT EXISTS pet_species_idx INT NOT NULL DEFAULT 0;
     ALTER TABLE app_state ADD COLUMN IF NOT EXISTS pet_xp INT NOT NULL DEFAULT 0;
     ALTER TABLE app_state ADD COLUMN IF NOT EXISTS collection JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE words ADD COLUMN IF NOT EXISTS kk TEXT;
   `);
   initialized = true;
 }

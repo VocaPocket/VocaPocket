@@ -11,6 +11,7 @@ export type Word = {
   origin: "search" | "daily";
   introducedDay?: string;
   phonetic?: string;
+  kk?: string;
   audio?: string;
   pos?: string;
   example?: string;
