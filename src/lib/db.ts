@@ -8,9 +8,12 @@ export const hasDb = !!process.env.DATABASE_URL;
 let pool: Pool | null = null;
 export function db(): Pool {
   if (!pool) {
+    const url = process.env.DATABASE_URL || "";
+    const isLocal = /localhost|127\.0\.0\.1/.test(url);
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : undefined,
+      connectionString: url,
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      max: 3, // serverless: keep per-instance connections small
     });
   }
   return pool;
